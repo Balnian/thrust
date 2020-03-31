@@ -352,11 +352,24 @@ foreach (THRUST_HEADER IN LISTS THRUST_HEADERS)
   list(APPEND THRUST_HEADER_TEST_SOURCES ${SOURCE_NAME})
 endforeach ()
 
-add_library(header-test OBJECT ${THRUST_HEADER_TEST_SOURCES})
+add_library(thrust-header-test OBJECT ${THRUST_HEADER_TEST_SOURCES})
 target_include_directories(
-  header-test
+  thrust-header-test
   PUBLIC ${PROJECT_SOURCE_DIR}
 )
+
+# Create Thrust Target
+add_library(Thrust INTERFACE)
+target_include_directories(Thrust INTERFACE ${CMAKE_SOURCE_DIR})
+
+# Adding CUB Target
+add_subdirectory(dependencies/cub)
+
+if(NOT TARGET CUB)
+  message(FATAL_ERROR "CUB was not found! Make sure you have the CUB submodule in ./dependencies/cub")
+endif()
+
+target_link_libraries(Thrust INTERFACE CUB)
 
 include(CTest)
 enable_testing()
@@ -383,9 +396,10 @@ endif ()
 add_library(thrust_testframework STATIC ${THRUST_TESTFRAMEWORK_FILES})
 target_include_directories(
   thrust_testframework
-  PUBLIC ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/dependencies/cub
   PRIVATE ${PROJECT_SOURCE_DIR}/testing
 )
+
+target_link_libraries(thrust_testframework Thrust)
 
 list(APPEND THRUST_TEST_GLOBS testing/*.cu)
 list(APPEND THRUST_TEST_GLOBS testing/*.cpp)
@@ -491,12 +505,12 @@ foreach (THRUST_TEST_SOURCE IN LISTS THRUST_TESTS)
 
   target_include_directories(
     ${THRUST_TEST}
-    PUBLIC ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/dependencies/cub
     PRIVATE ${PROJECT_SOURCE_DIR}/testing
   )
 
   target_link_libraries(${THRUST_TEST}
     thrust_testframework
+    Thrust
     ${THRUST_ADDITIONAL_LIBRARIES})
 
   if (THRUST_TEST_ADD_TO_CTEST)
@@ -518,12 +532,12 @@ foreach (THRUST_TEST_SOURCE IN LISTS THRUST_TESTS)
 
     target_include_directories(
       ${THRUST_TEST_RDC}
-      PUBLIC ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/dependencies/cub
       PRIVATE ${PROJECT_SOURCE_DIR}/testing
     )
 
     target_link_libraries(${THRUST_TEST_RDC}
       thrust_testframework
+      Thrust
       ${THRUST_ADDITIONAL_LIBRARIES})
 
     set_target_properties(${THRUST_TEST_RDC}
@@ -617,11 +631,11 @@ foreach (THRUST_EXAMPLE_SOURCE IN LISTS THRUST_EXAMPLES)
 
   target_include_directories(
     ${THRUST_EXAMPLE}
-    PUBLIC ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/dependencies/cub
     PRIVATE ${PROJECT_SOURCE_DIR}/examples
   )
 
   target_link_libraries(${THRUST_EXAMPLE}
+    Thrust
     ${THRUST_ADDITIONAL_LIBRARIES})
 
   add_test(NAME ${THRUST_EXAMPLE}
@@ -640,11 +654,11 @@ foreach (THRUST_EXAMPLE_SOURCE IN LISTS THRUST_EXAMPLES)
 
     target_include_directories(
       ${THRUST_EXAMPLE_RDC}
-      PUBLIC ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/dependencies/cub
       PRIVATE ${PROJECT_SOURCE_DIR}/examples
     )
 
     target_link_libraries(${THRUST_EXAMPLE_RDC}
+      Thrust
       ${THRUST_ADDITIONAL_LIBRARIES})
 
     set_target_properties(${THRUST_EXAMPLE_RDC}
