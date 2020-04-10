@@ -658,3 +658,123 @@ foreach (THRUST_EXAMPLE_SOURCE IN LISTS THRUST_EXAMPLES)
   endif ()
 endforeach ()
 
+# Handle benchmark.
+
+option(THRUST_BENCHMARK_FILECHECK_PATH "Path to the LLVM FileCheck utility." "")
+option(THRUST_ENABLE_BENCHMARKS_WITH_RDC "Also build all benchmark with RDC." OFF)
+
+set(THRUST_BENCHMARK_FILECHECK_ENABLED OFF)
+if (NOT "" STREQUAL "${THRUST_BENCHMARK_FILECHECK_PATH}")
+  execute_process(
+    COMMAND "${THRUST_BENCHMARK_FILECHECK_PATH}" "${THRUST_FILECHECK_DATA_PATH}/thrust.sanity.filecheck"
+    INPUT_FILE "${CMAKE_SOURCE_DIR}/cmake/sanity"
+    RESULT_VARIABLE THRUST_FILECHECK_RESULT
+  )
+
+  if ("0" STREQUAL "${THRUST_FILECHECK_RESULT}")
+    set(THRUST_BENCHMARK_FILECHECK_ENABLED ON)
+    message("-- FileCheck enabled: ${THRUST_BENCHMARK_FILECHECK_PATH}")
+  endif ()
+endif ()
+
+list(APPEND THRUST_BENCHMARK_GLOBS benchmarks/*.cu)
+list(APPEND THRUST_BENCHMARK_GLOBS benchmarks/*.cpp)
+
+if     ("CUDA" STREQUAL "${THRUST_DEVICE_SYSTEM}")
+  list(APPEND THRUST_BENCHMARK_GLOBS benchmarks/cuda/*.cu)
+elseif ("OMP" STREQUAL "${THRUST_DEVICE_SYSTEM}")
+  list(APPEND THRUST_BENCHMARK_GLOBS benchmarks/omp/*.cu)
+  list(APPEND THRUST_BENCHMARK_GLOBS benchmarks/omp/*.cpp)
+endif ()
+
+if (CMAKE_VERSION VERSION_LESS 3.12)
+  file(
+    GLOB THRUST_BENCHMARKS
+    RELATIVE ${PROJECT_SOURCE_DIR}/benchmarks
+    ${THRUST_BENCHMARK_GLOBS}
+    CONFIGURE_DEPENDS
+  )
+else ()
+  file(
+    GLOB THRUST_BENCHMARKS
+    RELATIVE ${PROJECT_SOURCE_DIR}/benchmarks
+    ${THRUST_BENCHMARK_GLOBS}
+  )
+endif ()
+
+set(THRUST_BENCHMARK_RUN_ARGUMENTS
+  -DTHRUST_SOURCE=${CMAKE_SOURCE_DIR}
+  -DTHRUST_FILECHECK_ENABLED=${THRUST_BENCHMARK_FILECHECK_ENABLED}
+  -DTHRUST_FILECHECK=${THRUST_BENCHMARK_FILECHECK_PATH}
+  -P "${CMAKE_SOURCE_DIR}/cmake/run_benchmark.cmake")
+
+foreach (THRUST_BENCHMARK_SOURCE IN LISTS THRUST_BENCHMARKS)
+  # TODO: Per-benchmark flags.
+
+  get_filename_component(THRUST_BENCHMARK_CATEGORY ${THRUST_BENCHMARK_SOURCE} DIRECTORY)
+  if (NOT ("" STREQUAL "${THRUST_BENCHMARK_CATEGORY}"))
+    set(THRUST_BENCHMARK_CATEGORY "${THRUST_BENCHMARK_CATEGORY}.")
+  endif ()
+
+  get_filename_component(THRUST_BENCHMARK_NAME ${THRUST_BENCHMARK_SOURCE} NAME_WE)
+
+  set(THRUST_BENCHMARK "thrust.benchmark.${THRUST_BENCHMARK_CATEGORY}${THRUST_BENCHMARK_NAME}")
+
+  if (NOT "CUDA" STREQUAL "${THRUST_DEVICE_SYSTEM}")
+    # Example files are generally .cu; if CUDA is not enabled, CMake doesn't know what to
+    # do with them. But since they are pretty much just C++, we can compile them with
+    # non-nvcc C++ compilers... but we need to tell CMake that they are, in fact, just C++.
+    set_source_files_properties(${PROJECT_SOURCE_DIR}/benchmarks/${THRUST_BENCHMARK_SOURCE}
+      PROPERTIES
+        LANGUAGE CXX
+        COMPILE_FLAGS "${THRUST_TREAT_FILE_AS_CXX}")
+  endif ()
+
+  add_executable(
+    ${THRUST_BENCHMARK}
+    ${PROJECT_SOURCE_DIR}/benchmarks/${THRUST_BENCHMARK_SOURCE}
+  )
+
+  target_include_directories(
+    ${THRUST_BENCHMARK}
+    PUBLIC ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/dependencies/cub
+    PRIVATE ${PROJECT_SOURCE_DIR}/benchmarks ${PROJECT_SOURCE_DIR}/dependencies
+  )
+
+  target_link_libraries(${THRUST_BENCHMARK}
+    ${THRUST_ADDITIONAL_LIBRARIES})
+
+  add_test(NAME ${THRUST_BENCHMARK}
+    COMMAND ${CMAKE_COMMAND}
+      -DTHRUST_BENCHMARK=${THRUST_BENCHMARK}
+      -DTHRUST_BINARY=$<TARGET_FILE:${THRUST_BENCHMARK}>
+      ${THRUST_BENCHMARK_RUN_ARGUMENTS})
+
+  if ("CUDA" STREQUAL "${THRUST_DEVICE_SYSTEM}" AND THRUST_ENABLE_BENCHMARKS_WITH_RDC)
+    set(THRUST_BENCHMARK_RDC "thrust.benchmark.${THRUST_BENCHMARK_CATEGORY}rdc.${THRUST_BENCHMARK_NAME}")
+
+    add_executable(
+      ${THRUST_BENCHMARK_RDC}
+      ${PROJECT_SOURCE_DIR}/benchmarks/${THRUST_BENCHMARK_SOURCE}
+    )
+
+    target_include_directories(
+      ${THRUST_BENCHMARK_RDC}
+      PUBLIC ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/dependencies/cub
+      PRIVATE ${PROJECT_SOURCE_DIR}/benchmarks ${PROJECT_SOURCE_DIR}/dependencies
+    )
+
+    target_link_libraries(${THRUST_BENCHMARK_RDC}
+      ${THRUST_ADDITIONAL_LIBRARIES})
+
+    set_target_properties(${THRUST_BENCHMARK_RDC}
+      PROPERTIES CUDA_SEPERABLE_COMPILATION ON)
+
+    add_test(NAME ${THRUST_BENCHMARK_RDC}
+      COMMAND ${CMAKE_COMMAND}
+        -DTHRUST_BENCHMARK=${THRUST_BENCHMARK}
+        -DTHRUST_BINARY=$<TARGET_FILE:${THRUST_BENCHMARK_RDC}>
+        ${THRUST_BENCHMARK_RUN_ARGUMENTS})
+  endif ()
+endforeach ()
+

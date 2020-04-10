@@ -25,6 +25,8 @@
 #include "random.h"
 #include "timer.h"
 
+#include <jitify/jitify.hpp>
+
 #if defined(HAVE_TBB)
   #include "tbb_algos.h"
 #endif
