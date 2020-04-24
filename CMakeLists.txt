@@ -742,7 +742,11 @@ foreach (THRUST_BENCHMARK_SOURCE IN LISTS THRUST_BENCHMARKS)
   )
 
   target_link_libraries(${THRUST_BENCHMARK}
-    ${THRUST_ADDITIONAL_LIBRARIES})
+    ${THRUST_ADDITIONAL_LIBRARIES}
+    "cuda"
+    "cudart"
+    "nvrtc"
+    )
 
   add_test(NAME ${THRUST_BENCHMARK}
     COMMAND ${CMAKE_COMMAND}
@@ -765,7 +769,11 @@ foreach (THRUST_BENCHMARK_SOURCE IN LISTS THRUST_BENCHMARKS)
     )
 
     target_link_libraries(${THRUST_BENCHMARK_RDC}
-      ${THRUST_ADDITIONAL_LIBRARIES})
+      ${THRUST_ADDITIONAL_LIBRARIES}
+      "cuda"
+      "cudart"
+      "nvrtc"
+      )
 
     set_target_properties(${THRUST_BENCHMARK_RDC}
       PROPERTIES CUDA_SEPERABLE_COMPILATION ON)
